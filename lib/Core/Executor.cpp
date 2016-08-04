@@ -3102,7 +3102,7 @@ void Executor::executeAlloc(ExecutionState &state,
       // TODO make the null thing optional
       ref<ConstantExpr> memExpr = mo->getBaseExpr();
       ref<ConstantExpr> nil = ConstantExpr::alloc(0, Context::get().getPointerWidth());
-      memExpr = memExpr.Or(nil);
+      memExpr = memExpr->Or(nil);
       bindLocal(target, state, memExpr);
       
       if (reallocFrom) {
