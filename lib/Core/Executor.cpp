@@ -3099,7 +3099,11 @@ void Executor::executeAlloc(ExecutionState &state,
       } else {
         os->initializeToRandom();
       }
-      bindLocal(target, state, mo->getBaseExpr());
+      // TODO make the null thing optional
+      ref<ConstantExpr> memExpr = mo->getBaseExpr();
+      ref<ConstantExpr> nil = ConstantExpr::alloc(0, Context::get().getPointerWidth());
+      memExpr = memExpr.Or(nil);
+      bindLocal(target, state, memExpr);
       
       if (reallocFrom) {
         unsigned count = std::min(reallocFrom->size, os->size);
