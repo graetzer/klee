@@ -144,6 +144,9 @@ public:
   std::string getFnAlias(std::string fn);
   void addFnAlias(std::string old_fn, std::string new_fn);
   void removeFnAlias(std::string fn);
+  
+  /// @brief Bytes of memory currently allocated for this state (and it's predecessors)
+  uint64_t memoryUsage;
 
 private:
   ExecutionState() : ptreeNode(0) {}

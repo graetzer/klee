@@ -3088,7 +3088,8 @@ void Executor::executeAlloc(ExecutionState &state,
                             const ObjectState *reallocFrom) {
   size = toUnique(state, size);
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
-    MemoryObject *mo = memory->allocate(CE->getZExtValue(), isLocal, false, 
+    uint64_t concreteSize = CE->getZExtValue();
+    MemoryObject *mo = memory->allocate(concreteSize, isLocal, false,
                                         state.prevPC->inst);
     if (!mo) {
       bindLocal(target, state, 
@@ -3111,6 +3112,8 @@ void Executor::executeAlloc(ExecutionState &state,
                   ConstantExpr::alloc(0, Context::get().getPointerWidth()));
 
       }
+      
+      memState->memoryUsage += concreteSize;
       
       ObjectState *os = bindObjectInState(*memState, mo, isLocal);
       if (zeroMemory) os->initializeToZero();
@@ -3221,6 +3224,7 @@ void Executor::executeFree(ExecutionState &state,
     for (Executor::ExactResolutionList::iterator it = rl.begin(), 
            ie = rl.end(); it != ie; ++it) {
       const MemoryObject *mo = it->first.first;
+      state.memoryUsage -= mo->size;
       if (mo->isLocal) {
         terminateStateOnError(*it->second, 
                               "free of alloca", 
