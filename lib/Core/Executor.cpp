@@ -301,6 +301,14 @@ namespace {
   MaxMemoryInhibit("max-memory-inhibit",
             cl::desc("Inhibit forking at memory cap (vs. random terminate) (default=on)"),
             cl::init(true));
+  
+  cl::opt<bool> MallocReturnNull("malloc-return-null",
+                                cl::desc("Explore possible NULL return for malloc (default=off)"),
+                                cl::init(false));
+  
+  cl::opt<unsigned> MallocReturnNullSize("malloc-return-null-size",
+                                         cl::desc("Explore malloc NULL return, if state uses more than this amount of memory (in MB, default=0)"),
+                                         cl::init(0));
 }
 
 
@@ -2819,6 +2827,9 @@ void Executor::terminateState(ExecutionState &state) {
     klee_warning_once(replayKTest,
                       "replay did not consume all objects in test input.");
   }
+  
+  if (statsTracker)
+    statsTracker->stateTerminated(state);
 
   interpreterHandler->incPathsExplored();
 
@@ -3096,8 +3107,20 @@ void Executor::executeAlloc(ExecutionState &state,
                 ConstantExpr::alloc(0, Context::get().getPointerWidth()));
     } else {
       
-      ExecutionState *memState = &state;// TODO add option
-      if (!isLocal) {
+      ExecutionState *memState = &state;
+      unsigned memSize = memState->memoryUsage + concreteSize;
+      
+      if (!isLocal && MallocReturnNull && memSize >= MallocReturnNullSize.getValue() * 1024 * 1024 ) {
+        
+        // TODO was passiert mit den seeds? Ansonsten wäre ja hier alles gleich im branch()
+        // außer addCondition. addCondition schlaegt fehl mo->getBaseExpr()->IsTrue == false
+        /*
+        std::vector<ref<Expr>> conditions;
+        conditions.push_back(mo->getBaseExpr());
+        std::vector<ExecutionState*> branches;
+        branch(state, conditions, branches);
+        memState = branches[0];
+        ExecutionState *nilState = branches[1];*/
         
         ExecutionState *nilState = state.branch();
         addedStates.push_back(nilState);
@@ -3112,8 +3135,7 @@ void Executor::executeAlloc(ExecutionState &state,
                   ConstantExpr::alloc(0, Context::get().getPointerWidth()));
 
       }
-      
-      memState->memoryUsage += concreteSize;
+      memState->memoryUsage = memSize;
       
       ObjectState *os = bindObjectInState(*memState, mo, isLocal);
       if (zeroMemory) os->initializeToZero();

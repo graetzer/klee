@@ -72,6 +72,8 @@ namespace klee {
     void markBranchVisited(ExecutionState *visitedTrue, 
                            ExecutionState *visitedFalse);
     
+    void stateTerminated(ExecutionState &es);
+    
     // called when execution is done and stats files should be flushed
     void done();
 

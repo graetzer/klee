@@ -400,6 +400,10 @@ void StatsTracker::markBranchVisited(ExecutionState *visitedTrue,
     }
   }
 }
+      
+void StatsTracker::stateTerminated(ExecutionState &es) {
+  stats::stateAllocatedMemory += es.memoryUsage;
+}
 
 void StatsTracker::writeStatsHeader() {
   *statsFile << "('Instructions',"
