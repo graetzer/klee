@@ -11,6 +11,7 @@
 #define KLEE_STATSTRACKER_H
 
 #include "CallPathManager.h"
+#include "klee/util/Ref.h"
 
 #include <set>
 
@@ -23,9 +24,11 @@ namespace llvm {
 
 namespace klee {
   class ExecutionState;
-  class Executor;  
+  class Executor;
+  class Expr;
   class InstructionInfoTable;
   class InterpreterHandler;
+  class MemoryObject;
   struct KInstruction;
   struct StackFrame;
 
@@ -36,7 +39,7 @@ namespace klee {
     Executor &executor;
     std::string objectFilename;
 
-    llvm::raw_fd_ostream *statsFile, *istatsFile;
+    llvm::raw_fd_ostream *statsFile, *istatsFile, *astatsFile;
     double startWallTime;
     
     unsigned numBranches;
@@ -73,6 +76,10 @@ namespace klee {
                            ExecutionState *visitedFalse);
     
     void stateTerminated(ExecutionState &es);
+    void memoryAllocated(ExecutionState &es, const MemoryObject *mo);
+    void memoryAllocationFailed(ExecutionState &es, bool simulated);
+    void memoryOutOfBounds(ExecutionState &es, ref<Expr> address);
+    void memoryFreed(ExecutionState &es, const MemoryObject *mo);
     
     // called when execution is done and stats files should be flushed
     void done();

@@ -2827,9 +2827,6 @@ void Executor::terminateState(ExecutionState &state) {
     klee_warning_once(replayKTest,
                       "replay did not consume all objects in test input.");
   }
-  
-  if (statsTracker)
-    statsTracker->stateTerminated(state);
 
   interpreterHandler->incPathsExplored();
 
@@ -2839,6 +2836,10 @@ void Executor::terminateState(ExecutionState &state) {
     state.pc = state.prevPC;
 
     removedStates.push_back(&state);
+    
+    if (statsTracker)
+      statsTracker->stateTerminated(state);
+    
   } else {
     // never reached searcher, just delete immediately
     std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3 = 
@@ -3105,6 +3106,8 @@ void Executor::executeAlloc(ExecutionState &state,
     if (!mo) {
       bindLocal(target, state, 
                 ConstantExpr::alloc(0, Context::get().getPointerWidth()));
+      if (statsTracker)
+        statsTracker->memoryAllocationFailed(state, false);
     } else {
       
       ExecutionState *memState = &state;
@@ -3133,6 +3136,8 @@ void Executor::executeAlloc(ExecutionState &state,
         
         bindLocal(target, *nilState,
                   ConstantExpr::alloc(0, Context::get().getPointerWidth()));
+        if (statsTracker)
+          statsTracker->memoryAllocationFailed(state, true);
 
       }
       memState->memoryUsage = memSize;
@@ -3148,6 +3153,9 @@ void Executor::executeAlloc(ExecutionState &state,
           os->write(i, reallocFrom->read8(i));
         memState->addressSpace.unbindObject(reallocFrom->getObject());
       }
+      
+      if (statsTracker)
+        statsTracker->memoryAllocated(state, mo);
       
     }// if(mo)
   } else {
@@ -3246,7 +3254,6 @@ void Executor::executeFree(ExecutionState &state,
     for (Executor::ExactResolutionList::iterator it = rl.begin(), 
            ie = rl.end(); it != ie; ++it) {
       const MemoryObject *mo = it->first.first;
-      state.memoryUsage -= mo->size;
       if (mo->isLocal) {
         terminateStateOnError(*it->second, 
                               "free of alloca", 
@@ -3258,6 +3265,10 @@ void Executor::executeFree(ExecutionState &state,
                               "free.err",
                               getAddressInfo(*it->second, address));
       } else {
+        state.memoryUsage -= mo->size;
+        if (statsTracker)
+          statsTracker->memoryFreed(state, mo);
+      
         it->second->addressSpace.unbindObject(mo);
         if (target)
           bindLocal(target, *it->second, Expr::createPointer(0));
@@ -3419,6 +3430,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                             "memory error: out of bound pointer",
                             "ptr.err",
                             getAddressInfo(*unbound, address));
+      if (statsTracker)
+        statsTracker->memoryOutOfBounds(state, address);
     }
   }
 }

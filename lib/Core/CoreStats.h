@@ -47,8 +47,6 @@ namespace stats {
   /// distance to a function return.
   extern Statistic minDistToReturn;
 
-  /// track the amount of memory needed by a state before terminating
-  extern Statistic stateAllocatedMemory;
 }
 }
 

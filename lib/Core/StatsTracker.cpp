@@ -10,6 +10,7 @@
 #include "StatsTracker.h"
 
 #include "klee/ExecutionState.h"
+#include "klee/Expr.h"
 #include "klee/Statistics.h"
 #include "klee/Config/Version.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
@@ -24,6 +25,7 @@
 #include "CallPathManager.h"
 #include "CoreStats.h"
 #include "Executor.h"
+#include "Memory.h"
 #include "MemoryManager.h"
 #include "UserSearcher.h"
 
@@ -112,6 +114,11 @@ namespace {
 	       cl::init(true),
                cl::desc("Enable calltree tracking for instruction level statistics (default=on)"));
   
+  cl::opt<bool>
+  OutputAStats("output-astats",
+               cl::init(true),
+               cl::desc("Write malloc statistics (default=on)"));
+  
 }
 
 ///
@@ -183,6 +190,7 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     objectFilename(_objectFilename),
     statsFile(0),
     istatsFile(0),
+    astatsFile(0),
     startWallTime(util::getWallTime()),
     numBranches(0),
     fullBranches(0),
@@ -267,6 +275,12 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     if (IStatsWriteInterval > 0)
       executor.addTimer(new WriteIStatsTimer(this), IStatsWriteInterval);
   }
+  
+  if (OutputAStats) {
+    astatsFile = executor.interpreterHandler->openOutputFile("run.astats");
+    assert(astatsFile && "unable to open astats file");
+    astatsFile->flush();
+  }
 }
 
 StatsTracker::~StatsTracker() {  
@@ -274,6 +288,8 @@ StatsTracker::~StatsTracker() {
     delete statsFile;
   if (istatsFile)
     delete istatsFile;
+  if (astatsFile)
+    delete astatsFile;
 }
 
 void StatsTracker::done() {
@@ -285,6 +301,8 @@ void StatsTracker::done() {
       computeReachableUncovered();
     writeIStats();
   }
+  
+  if (astatsFile) astatsFile->flush();
 }
 
 void StatsTracker::stepInstruction(ExecutionState &es) {
@@ -402,7 +420,47 @@ void StatsTracker::markBranchVisited(ExecutionState *visitedTrue,
 }
       
 void StatsTracker::stateTerminated(ExecutionState &es) {
-  stats::stateAllocatedMemory += es.memoryUsage;
+  //stats::stateAllocatedMemory += es.memoryUsage;
+  if (astatsFile) {
+    const InstructionInfo &ii = *es.pc->info;
+    *astatsFile << ii.file << "," << ii.line << ",terminated," << es.memoryUsage <<"\n";
+    astatsFile->flush();
+  }
+}
+      
+void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
+  if (!mo->isLocal && !mo->isGlobal && astatsFile) {
+    const InstructionInfo &ii = *es.pc->info;
+    *astatsFile << ii.file << "," << ii.line << ",malloc," << mo->size << "\n";
+    astatsFile->flush();
+  }
+}
+
+void StatsTracker::memoryAllocationFailed(ExecutionState &es, bool simulated) {
+  if (!simulated && astatsFile) {
+    const InstructionInfo &ii = *es.pc->info;
+    *astatsFile << ii.file << "," << ii.line << ",malloc,failed\n";
+    astatsFile->flush();
+  }
+}
+
+void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
+    
+    if (CE->getZExtValue() == 0) {
+      const InstructionInfo &ii = *es.pc->info;
+      *astatsFile << ii.file << "," << ii.line << ",accessnullptr\n";
+      astatsFile->flush();
+    }
+  }
+}
+
+void StatsTracker::memoryFreed(ExecutionState &es, const MemoryObject *mo) {
+  if (astatsFile) {
+    const InstructionInfo &ii = *es.pc->info;
+    *astatsFile << ii.file << "," << ii.line << ",free," << mo->size << "\n";
+    astatsFile->flush();
+  }
 }
 
 void StatsTracker::writeStatsHeader() {

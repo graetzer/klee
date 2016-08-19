@@ -73,6 +73,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     queryCost(0.), 
     weight(1),
     depth(0),
+    memoryUsage(0),
 
     instsSinceCovNew(0),
     coveredNew(false),
