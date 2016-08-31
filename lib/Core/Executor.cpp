@@ -3126,6 +3126,7 @@ void Executor::executeAlloc(ExecutionState &state,
         ExecutionState *nilState = branches[1];*/
         
         ExecutionState *nilState = state.branch();
+        nilState->simulatedNil = true;
         addedStates.push_back(nilState);
 
         state.ptreeNode->data = 0;

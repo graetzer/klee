@@ -147,6 +147,9 @@ public:
   
   /// @brief Bytes of memory currently allocated for this state (and it's predecessors)
   unsigned memoryUsage;
+  unsigned currentId = 0;
+  unsigned parentId = 0;
+  bool simulatedNil = false;
 
 private:
   ExecutionState() : ptreeNode(0) {}

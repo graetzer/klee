@@ -279,6 +279,7 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
   if (OutputAStats) {
     astatsFile = executor.interpreterHandler->openOutputFile("run.astats");
     assert(astatsFile && "unable to open astats file");
+    *astatsFile << "[";
     astatsFile->flush();
   }
 }
@@ -302,7 +303,10 @@ void StatsTracker::done() {
     writeIStats();
   }
   
-  if (astatsFile) astatsFile->flush();
+  if (astatsFile) {
+    *astatsFile << "]";
+    astatsFile->flush();
+  }
 }
 
 void StatsTracker::stepInstruction(ExecutionState &es) {
@@ -342,11 +346,11 @@ void StatsTracker::stepInstruction(ExecutionState &es) {
         //
         // FIXME: This trick no longer works, we should fix this in the line
         // number propogation.
-          es.coveredLines[&ii.file].insert(ii.line);
-	es.coveredNew = true;
+         es.coveredLines[&ii.file].insert(ii.line);
+        es.coveredNew = true;
         es.instsSinceCovNew = 1;
-	++stats::coveredInstructions;
-	stats::uncoveredInstructions += (uint64_t)-1;
+        ++stats::coveredInstructions;
+        stats::uncoveredInstructions += (uint64_t)-1;
       }
     }
   }
@@ -387,6 +391,10 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
     sf.minDistToUncoveredOnReturn =
         sf.caller ? computeMinDistToUncovered(sf.caller, minDistAtRA) : 0;
   }
+  
+  if (astatsFile && parentFrame == 0) {// initial state
+    *astatsFile << "{'id':" << es.currentId << ",'memory':" << es.memoryUsage  << "}\n";
+  }
 }
 
 /* Should be called _after_ the es->popFrame() */
@@ -423,7 +431,10 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
   //stats::stateAllocatedMemory += es.memoryUsage;
   if (astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ii.file << "," << ii.line << ",terminated," << es.memoryUsage <<"\n";
+    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
+                << ",'file':'" << ii.file << "#" << ii.line << "',";
+    if (es.simulatedNil) *astatsFile << "'simulatedNil':true,";
+    *astatsFile << "'terminated':true}\n";
     astatsFile->flush();
   }
 }
@@ -431,7 +442,8 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
 void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
   if (!mo->isLocal && !mo->isGlobal && astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ii.file << "," << ii.line << ",malloc," << mo->size << "\n";
+    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
+                << ",'malloc':" << mo->size << ",'file':'" << ii.file << "#" << ii.line << "'}\n";
     astatsFile->flush();
   }
 }
@@ -439,7 +451,8 @@ void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
 void StatsTracker::memoryAllocationFailed(ExecutionState &es, bool simulated) {
   if (!simulated && astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ii.file << "," << ii.line << ",malloc,failed\n";
+    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
+                << ",'error':'malloc'" << ",'file':'" << ii.file << "#" << ii.line << "'}\n";
     astatsFile->flush();
   }
 }
@@ -447,18 +460,23 @@ void StatsTracker::memoryAllocationFailed(ExecutionState &es, bool simulated) {
 void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
     
+    const InstructionInfo &ii = *es.pc->info;
+    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId;
     if (CE->getZExtValue() == 0) {
-      const InstructionInfo &ii = *es.pc->info;
-      *astatsFile << ii.file << "," << ii.line << ",accessnullptr\n";
-      astatsFile->flush();
+       *astatsFile << ",'error':'nullptr',";
+    } else {
+      *astatsFile << ",'error':'outofbounds',";
     }
+    *astatsFile << "'file':'" << ii.file << "#" << ii.line << "'}\n";
+    astatsFile->flush();
   }
 }
 
 void StatsTracker::memoryFreed(ExecutionState &es, const MemoryObject *mo) {
   if (astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ii.file << "," << ii.line << ",free," << mo->size << "\n";
+    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
+                << ",'free':" << mo->size << ",'file':'" << ii.file << "#" << ii.line << "'}\n";
     astatsFile->flush();
   }
 }
