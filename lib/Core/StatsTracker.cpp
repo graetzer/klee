@@ -393,7 +393,7 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame) {
   }
   
   if (astatsFile && parentFrame == 0) {// initial state
-    *astatsFile << "{'id':" << es.currentId << ",'memory':" << es.memoryUsage  << "}\n";
+    *astatsFile << "{\"id\":" << es.currentId << ",\"memory\":" << es.memoryUsage  << "}\n";
   }
 }
 
@@ -431,10 +431,10 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
   //stats::stateAllocatedMemory += es.memoryUsage;
   if (astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
-                << ",'file':'" << ii.file << "#" << ii.line << "',";
-    if (es.simulatedNil) *astatsFile << "'simulatedNil':true,";
-    *astatsFile << "'terminated':true}\n";
+    *astatsFile << ",{\"id\":" << es.currentId << ",\"parent\":" << es.parentId << ",\"memory\":" << es.memoryUsage
+                << ",\"file\":\"" << ii.file << "#" << ii.line << "\",";
+    if (es.simulatedNil) *astatsFile << "\"simulatedNil\":true,";
+    *astatsFile << "\"terminated\":true}\n";
     astatsFile->flush();
   }
 }
@@ -442,8 +442,8 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
 void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
   if (!mo->isLocal && !mo->isGlobal && astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
-                << ",'malloc':" << mo->size << ",'file':'" << ii.file << "#" << ii.line << "'}\n";
+    *astatsFile << ",{\"id\":" << es.currentId << ",\"parent\":" << es.parentId << ",\"memory\":" << es.memoryUsage
+                << ",\"malloc\":" << mo->size << ",\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
     astatsFile->flush();
   }
 }
@@ -451,8 +451,8 @@ void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
 void StatsTracker::memoryAllocationFailed(ExecutionState &es, bool simulated) {
   if (!simulated && astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
-                << ",'error':'malloc'" << ",'file':'" << ii.file << "#" << ii.line << "'}\n";
+    *astatsFile << ",{\"id\":" << es.currentId << ",\"parent\":" << es.parentId << ",\"memory\":" << es.memoryUsage
+                << ",\"error\":\"malloc\"" << ",\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
     astatsFile->flush();
   }
 }
@@ -461,13 +461,13 @@ void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
     
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId;
+    *astatsFile << ",{\"id\":" << es.currentId << ",\"parent\":" << es.parentId;
     if (CE->getZExtValue() == 0) {
-       *astatsFile << ",'error':'nullptr',";
+       *astatsFile << ",\"error\":\"nullptr\",";
     } else {
-      *astatsFile << ",'error':'outofbounds',";
+      *astatsFile << ",\"error\":\"outofbounds\",";
     }
-    *astatsFile << "'file':'" << ii.file << "#" << ii.line << "'}\n";
+    *astatsFile << "\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
     astatsFile->flush();
   }
 }
@@ -475,8 +475,8 @@ void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
 void StatsTracker::memoryFreed(ExecutionState &es, const MemoryObject *mo) {
   if (astatsFile) {
     const InstructionInfo &ii = *es.pc->info;
-    *astatsFile << ",{'id':" << es.currentId << ",'parent':" << es.parentId << ",'memory':" << es.memoryUsage
-                << ",'free':" << mo->size << ",'file':'" << ii.file << "#" << ii.line << "'}\n";
+    *astatsFile << ",{\"id\":" << es.currentId << ",\"parent\":" << es.parentId << ",\"memory\":" << es.memoryUsage
+                << ",\"free\":" << mo->size << ",\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
     astatsFile->flush();
   }
 }
