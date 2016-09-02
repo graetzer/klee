@@ -306,8 +306,8 @@ namespace {
                                 cl::desc("Explore possible NULL return for malloc (default=off)"),
                                 cl::init(false));
   
-  cl::opt<unsigned> MallocReturnNullSize("malloc-return-null-size",
-                                         cl::desc("Explore malloc NULL return, if state uses more than this amount of memory (in MB, default=0)"),
+  cl::opt<unsigned> MallocReturnNullThreshold("malloc-return-null-threshold",
+                                         cl::desc("Threshold for malloc to fork and return NULL in one branch (in MB, default=0)"),
                                          cl::init(0));
 }
 
@@ -3113,7 +3113,7 @@ void Executor::executeAlloc(ExecutionState &state,
       ExecutionState *memState = &state;
       unsigned memSize = memState->memoryUsage + concreteSize;
       
-      if (!isLocal && MallocReturnNull && memSize >= MallocReturnNullSize.getValue() * 1024 * 1024 ) {
+      if (!isLocal && MallocReturnNull && memSize >= MallocReturnNullThreshold.getValue() * 1024 * 1024 ) {
         
         // TODO was passiert mit den seeds? Ansonsten wäre ja hier alles gleich im branch()
         // außer addCondition. addCondition schlaegt fehl mo->getBaseExpr()->IsTrue == false
@@ -3138,8 +3138,7 @@ void Executor::executeAlloc(ExecutionState &state,
         bindLocal(target, *nilState,
                   ConstantExpr::alloc(0, Context::get().getPointerWidth()));
         if (statsTracker)
-          statsTracker->memoryAllocationFailed(state, true);
-
+          statsTracker->memoryAllocationFailed(*nilState, true);
       }
       memState->memoryUsage = memSize;
       
@@ -3156,7 +3155,7 @@ void Executor::executeAlloc(ExecutionState &state,
       }
       
       if (statsTracker)
-        statsTracker->memoryAllocated(state, mo);
+        statsTracker->memoryAllocated(*memState, mo);
       
     }// if(mo)
   } else {

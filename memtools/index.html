@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<head>
+  <meta charset="utf-8">
+  <style>
+    .bar rect {
+      fill: steelblue;
+    }
+    
+    .bar text {
+      fill: #fff;
+      font: 10px sans-serif;
+    }
+    
+    .node circle {
+      fill: #999;
+    }
+    
+    .node text {
+      font: 10px sans-serif;
+    }
+    
+    .node--internal circle {
+      fill: #555;
+    }
+    
+    .node--internal circle.nullptr {
+      fill: #E82C0C;
+    }
+  
+    .node--internal circle.outofbounds {
+      fill: #E80C7A;
+    }
+  
+    .node--internal text {
+      text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+    }
+  
+    circle.simulatedNil {
+      fill: #FF0DFF;
+    }
+  
+    .link {
+      fill: none;
+      stroke: #555;
+      stroke-opacity: 0.4;
+      stroke-width: 1.5px;
+    }
+    
+    .chart {
+      display: block;
+      margin: auto;
+      margin-top: 40px;
+    }
+    
+    text {
+      font-size: 11px;
+    }
+    
+    rect {
+      fill: none;
+    }
+  </style>
+  <script src="https://d3js.org/d3.v4.js"></script>
+  <script src="tree.js"></script>
+  <script src="histogram.js"></script>
+</head>
+
+<body>
+
+  <div id="histogram">
+    <h3>Histogram Malloc Sizes</h3>
+  </div>
+
+  <div id="hierarchy">
+    <h3>State Hierarchy</h3>
+  </div>
+
+  <div id="treemap">
+    <h3>TreeMap</h3>
+  </div>
+
+  <script>
+    "use strict";
+    var margin = {
+        top: 10,
+        right: 30,
+        bottom: 30,
+        left: 30
+      },
+      width = 1000 - margin.left - margin.right,
+      height = 500 - margin.top - margin.bottom;
+
+    d3.json("run.astats", function(error, events) {
+      if (error) throw error;
+
+      var mallocs = events.filter(el => el.malloc != undefined);
+      showHistogram(mallocs.map(e => e.malloc), width, height, margin);
+
+      var states = d3.values(d3.nest()
+        .key(d => d.id)
+        .rollup(function(leaves) {
+                var errors = leaves.filter(e => e.error).map(e =>
+                                                             {return {name: e.error,
+                                                             func: e.func,
+                                                             file: e.file.substring(e.file.lastIndexOf('/')+1)
+                                                             }});
+                var memory = -1, simulatedNil = false;
+                leaves.forEach(l => {
+                               if (l.terminated) {
+                                memory = l.memory
+                                simulatedNil = l.simulatedNil === true;
+                               }
+                               });
+          return {
+            id: leaves[0].id,
+            parentId: leaves[0].id != 0 ? leaves[0].parentId : null,
+            memory: memory,
+            errors: errors,
+            simulatedNil: simulatedNil
+          };
+        }).map(events)).slice(0, -12);
+
+      var root = d3.stratify()(states);
+      showTree(root, width, height*2, margin);
+
+      var files = mallocs.map(d => d.file.substring(d.file.lastIndexOf('/')+1, d.file.lastIndexOf('#')) )
+                  .filter( (f, pos, self) => self.indexOf(f) === pos)
+
+      var root = {name:"Mallocs", children:files.map( f => {name:f} ) };
+
+
+
+
+      /*
+            var root = d3.stratify().id(function(d) {
+              return d.file.split('#')[0];
+            })
+
+            (states);
+            showHistogram(mallocs);*/
+
+
+    });
+  </script>
+</body>
+
+</html>
