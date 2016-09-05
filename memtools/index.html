@@ -27,19 +27,19 @@
     .node--internal circle.nullptr {
       fill: #E82C0C;
     }
-  
+    
     .node--internal circle.outofbounds {
       fill: #E80C7A;
     }
-  
+    
     .node--internal text {
       text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
     }
-  
+    
     circle.simulatedNil {
       fill: #FF0DFF;
     }
-  
+    
     .link {
       fill: none;
       stroke: #555;
@@ -64,6 +64,7 @@
   <script src="https://d3js.org/d3.v4.js"></script>
   <script src="tree.js"></script>
   <script src="histogram.js"></script>
+  <script src="treemap.js"></script>
 </head>
 
 <body>
@@ -76,7 +77,7 @@
     <h3>State Hierarchy</h3>
   </div>
 
-  <div id="treemap">
+  <div id="treemap" style="position:relative">
     <h3>TreeMap</h3>
   </div>
 
@@ -100,18 +101,22 @@
       var states = d3.values(d3.nest()
         .key(d => d.id)
         .rollup(function(leaves) {
-                var errors = leaves.filter(e => e.error).map(e =>
-                                                             {return {name: e.error,
-                                                             func: e.func,
-                                                             file: e.file.substring(e.file.lastIndexOf('/')+1)
-                                                             }});
-                var memory = -1, simulatedNil = false;
-                leaves.forEach(l => {
-                               if (l.terminated) {
-                                memory = l.memory
-                                simulatedNil = l.simulatedNil === true;
-                               }
-                               });
+          var errors = leaves.filter(e => e.error).map(e => {
+            return {
+              name: e.error,
+              func: e.func,
+              file: e.file.substring(e.file.lastIndexOf('/') + 1)
+            }
+          });
+
+          var memory = -1,
+            simulatedNil = false;
+          leaves.forEach(l => {
+            if (l.terminated) {
+              memory = l.memory
+              simulatedNil = l.simulatedNil === true;
+            }
+          });
           return {
             id: leaves[0].id,
             parentId: leaves[0].id != 0 ? leaves[0].parentId : null,
@@ -122,16 +127,31 @@
         }).map(events)).slice(0, -12);
 
       var root = d3.stratify()(states);
-      showTree(root, width, height*2, margin);
-
-      var files = mallocs.map(d => d.file.substring(d.file.lastIndexOf('/')+1, d.file.lastIndexOf('#')) )
-                  .filter( (f, pos, self) => self.indexOf(f) === pos)
-
-      var root = {name:"Mallocs", children:files.map( f => {name:f} ) };
+      showTree(root, width, height * 2, margin);
 
 
+      function fileHirarchy(file) {
+        var fileMallocs = mallocs.filter(m => m.file.lastIndexOf(file, 0) === 0);
+        var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
+        return funcs.map(f => ({
+          name: f,
+          children: fileMallocs.filter(m => m.func === f).map(m => ({
+            name: m.malloc+"",
+            size: m.malloc
+          }))
+        }));
+      }
 
-
+      var files = mallocs.map(m => m.file.substring(0, m.file.lastIndexOf('#')))
+                         .filter((f, pos, self) => self.indexOf(f) === pos) // O(n^2) method to get unique filenames
+      root = {
+        name: "Mallocs",
+        children: files.map(file => ({ // functions
+          name: file.substring(file.lastIndexOf('/') + 1, file.length),
+          children: fileHirarchy(file)
+        }))
+      };
+      showTreeMap(d3.hierarchy(root), width, height * 2, margin);
       /*
             var root = d3.stratify().id(function(d) {
               return d.file.split('#')[0];

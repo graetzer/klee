@@ -33,9 +33,9 @@ function showTree(root, width, height, margin) {
 
     node.append("circle")
         .attr("class", function(d) {
-              var clss = d.data.errors ? d.data.errors.map(e => e.name).join(' ') : "";
-              if (d.data.simulatedNil) clss += " simulatedNil";
-              return clss;
+            var clss = d.data.errors ? d.data.errors.map(e => e.name).join(' ') : "";
+            if (d.data.simulatedNil) clss += " simulatedNil";
+            return clss;
         })
         .attr("r", 3);
 
@@ -48,22 +48,19 @@ function showTree(root, width, height, margin) {
             return d.children ? "end" : "start";
         })
         .text(function(d) {
-            return ""+d.data.memory;
+            return "" + d.data.memory;
         });
-  
-  node.append("title")
-  .text(function(d) {
-        var text = "Memory: " + d.data.memory + "\n";
-        if (d.data.simulatedNil) text += "Simulated out of memory\n";
-        if (d.data.errors && d.data.errors.length > 0) {
-          text += "Errors:\n"
-          d.data.errors.forEach(e =>
-                                {text += e.name + " in " + e.func + "() at " + e.file + "\n"});
-        }
-        return text;
+
+    node.append("title")
+        .text(function(d) {
+            var text = "Memory: " + d.data.memory + "\n";
+            if (d.data.simulatedNil) text += "Simulated out of memory\n";
+            if (d.data.errors && d.data.errors.length > 0) {
+                text += "Errors:\n"
+                d.data.errors.forEach(e => {
+                    text += e.name + " in " + e.func + "() at " + e.file + "\n"
+                });
+            }
+            return text;
         });
-  
-  
-  //
-  return str;
 }
