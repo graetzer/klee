@@ -55,7 +55,7 @@ var color = d3.scaleOrdinal(d3.schemeCategory20c);
     .attr("dy", ".35em")
     .attr("text-anchor", "middle")
     .text(function(d) {
-      return d.parent.data.name + "-" + d.data.name;
+      return d.data.name;
     })
     .style("opacity", function(d) {
       d.w = this.getComputedTextLength();

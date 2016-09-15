@@ -136,7 +136,7 @@
         return funcs.map(f => ({
           name: f,
           children: fileMallocs.filter(m => m.func === f).map(m => ({
-            name: m.malloc+"",
+            name: m.file.substring(m.file.lastIndexOf('/')+1) + " " + m.malloc+"b",
             size: m.malloc
           }))
         }));
