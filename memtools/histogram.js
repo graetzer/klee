@@ -2,7 +2,10 @@ var formatCount = d3.format(",.0f");
 
 function showHistogram(data, width, height, margin) {
 
-  var x = d3.scaleLinear().domain([d3.min(data), d3.max(data)]).rangeRound([0, width]);
+  var x = d3.scaleLinear()
+  .domain([d3.min(data), d3.max(data)])
+  .rangeRound([0, width]);
+  //.padding(0.1);
 
   var bins = d3.histogram()
     .domain(x.domain())
@@ -50,4 +53,14 @@ function showHistogram(data, width, height, margin) {
     .attr("class", "axis axis--x")
     .attr("transform", "translate(0," + height + ")")
     .call(d3.axisBottom(x));
+
+  svg.append("g")
+      .attr("class", "axis axis--y")
+      .call(d3.axisLeft(y))
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", "0.71em")
+      .attr("text-anchor", "end")
+      .text("Frequency");
 }

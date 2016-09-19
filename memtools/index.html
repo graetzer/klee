@@ -2,6 +2,8 @@
 
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     .bar rect {
       fill: steelblue;
@@ -60,29 +62,70 @@
     rect {
       fill: none;
     }
+
+    .bar {
+      fill: steelblue;
+    }
+
+    .bar:hover {
+      fill: brown;
+    }
+
+    .axis--x path {
+      display: none;
+    }
   </style>
   <script src="https://d3js.org/d3.v4.js"></script>
   <script src="tree.js"></script>
   <script src="histogram.js"></script>
-  <script src="treemap.js"></script>
+  <script src="arc.js"></script>
+  <script src="chart.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" 
+  integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/styles/default.min.css">
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
 </head>
 
 <body>
-
-  <div id="histogram">
-    <h3>Histogram Malloc Sizes</h3>
+  <h2>Memory Analysis</h2>
+  <div id="hierarchy">
+    <h3>Execution Overview</h3>
   </div>
 
   <div id="hierarchy">
-    <h3>State Hierarchy</h3>
+    <h3>Execution Overview</h3>
   </div>
 
+  <div id="chart" style="float:left‚"></div>
+  <div id="snippets" style="float:right"></div>
+  <dive style="clear:both"></div>
+
+  <div id="histogram" style="clear:both">
+    <h3>Histogram Malloc Sizes</h3>
+  </div>
   <div id="treemap" style="position:relative">
-    <h3>TreeMap</h3>
+    <h3>(disabled) TreeMap</h3>
   </div>
 
   <script>
     "use strict";
+    var cache = {};
+    function getFileLines(file, callback) {
+      if (cache[file]) {
+        callback(null, cache[file]);
+        return;
+      }
+      d3.text("/src/" + file,  function(error, text) {
+         if (error) {
+           callback(error);
+           return;
+         }
+         var lines = text.match(/[^\r\n]+/g);
+         cache[file] = lines;
+         callback(null, lines);
+      });
+    }
+
     var margin = {
         top: 10,
         right: 30,
@@ -109,27 +152,61 @@
             }
           });
 
-          var memory = -1,
-            simulatedNil = false;
-          leaves.forEach(l => {
-            if (l.terminated) {
-              memory = l.memory
-              simulatedNil = l.simulatedNil === true;
-            }
-          });
-          return {
+          var res = {
             id: leaves[0].id,
             parentId: leaves[0].id != 0 ? leaves[0].parentId : null,
-            memory: memory,
-            errors: errors,
-            simulatedNil: simulatedNil
-          };
+            mallocs: leaves.filter(l => l.malloc != undefined),
+            errors: errors
+          }
+          leaves.forEach(l => {
+            if (l.terminated) {
+              res.memory = l.memory
+              res.simulatedNil = l.simulatedNil === true;
+              res.file = l.file;
+              res.line = l.line;
+              if (l.stack) res.stack = l.stack;
+            }
+          });
+          return res;
         }).map(events)).slice(0, -12);
 
       var root = d3.stratify()(states);
-      showTree(root, width, height * 2, margin);
+      showTree(root, width, height * 2, margin, function(mallocs, stack) {
+
+        showChart("#chart", mallocs.map(m => m.memory), width, height, margin);
+
+        // TODO switch between mallocs and stack for the code view
+        stack.forEach(sf => {
+          var file = sf.file.substring(sf.file.lastIndexOf('/')+1);
+          getFileLines(file, (error, lines) => {
+            
+            var min = Math.max(0, sf.line - 5);
+            var max = Math.min(lines.length, sf.line+5);
+            var print = lines.slice(min, max);
+
+            d3.select("#snippets")
+            .append("pre")
+            .attr("style", "border:solid 1px black")
+            .append('code')
+            .attr("class", "cpp")
+            .text(function(d) {
+                return print.join('\n');
+            });
+
+            //if (print) {render}
+
+          });
+          
+        });
+
+        var tags = document.getElementsByTagName("code")
+        for (var i = 0; i < tags.length; i++)
+          hljs.highlightBlock(tags[i]);
+     });
 
 
+
+/*
       function fileHirarchy(file) {
         var fileMallocs = mallocs.filter(m => m.file.lastIndexOf(file, 0) === 0);
         var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
@@ -151,18 +228,10 @@
           children: fileHirarchy(file)
         }))
       };
-      showTreeMap(d3.hierarchy(root), width, height * 2, margin);
-      /*
-            var root = d3.stratify().id(function(d) {
-              return d.file.split('#')[0];
-            })
-
-            (states);
-            showHistogram(mallocs);*/
-
-
+      showArc(d3.hierarchy(root), width, height * 2, margin);//;*/
     });
-  </script>
+
+</script>
 </body>
 
 </html>

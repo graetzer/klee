@@ -1,4 +1,6 @@
-function showTree(root, width, height, margin) {
+"use strict";
+
+function showTree(root, width, height, margin, func) {
 
     var svg = d3.select("#hierarchy").append("svg")
         .attr("width", width + margin.left + margin.right)
@@ -37,7 +39,17 @@ function showTree(root, width, height, margin) {
             if (d.data.simulatedNil) clss += " simulatedNil";
             return clss;
         })
-        .attr("r", 3);
+        .attr("r", 3)
+        .on("click", function(d) {
+
+            var mallocs = [];
+            let t = d;
+            while (t) {
+                mallocs = mallocs.concat(t.data.mallocs);
+                t = t.parent;
+            }
+            func(mallocs, d.data.stack);
+        });
 
     node.append("text")
         .attr("dy", 3)

@@ -431,7 +431,49 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
   //stats::stateAllocatedMemory += es.memoryUsage;
   if (astatsFile) {
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId << ",\"memory\":" << es.memoryUsage;
-    if (es.simulatedNil) *astatsFile << ",\"simulatedNil\":true";
+
+    if (es.simulatedNil) {
+      *astatsFile << ",\"simulatedNil\":true,\"stack\":[";
+
+      // dump the stack
+      KInstruction *target = es.prevPC;
+      for (ExecutionState::stack_ty::const_reverse_iterator
+            it = es.stack.rbegin(), ie = es.stack.rend(); it != ie; ++it) {
+
+        if (it != es.stack.rbegin()) *astatsFile << ",\n";
+        
+        const StackFrame &sf = *it;
+        const InstructionInfo &ii = *target->info;
+        Function *f = sf.kf->function;
+
+        unsigned index = 0;
+        *astatsFile << "{\"func\":\"" << f->getName().str() << "(";
+        for (Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
+            ai != ae; ++ai) {
+          if (ai != f->arg_begin()) *astatsFile << ", ";
+
+          *astatsFile << ai->getName().str();
+          // XXX should go through function ai->getArgNo()
+          ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
+          if (value.get() && isa<ConstantExpr>(value))
+            *astatsFile << "=" << value;
+        }
+        *astatsFile << ")\"";
+
+        if (ii.file != "") {
+          *astatsFile << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line;
+        }
+
+        *astatsFile << "}";
+        target = sf.caller;
+      }
+
+      *astatsFile << "]";
+    } else {
+      const InstructionInfo &ii = *es.pc->info;
+      if (ii.file != "")
+        *astatsFile << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line ;
+    }
     *astatsFile << ",\"terminated\":true}\n";
     astatsFile->flush();
   }
@@ -444,7 +486,7 @@ void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId << ",\"memory\":" << es.memoryUsage
                 << ",\"malloc\":" << mo->size
                 << ",\"func\":\"" << sf.kf->function->getName().str() << "\""
-                << ",\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
+                << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line << "}\n";
     astatsFile->flush();
   }
 }
@@ -457,7 +499,7 @@ void StatsTracker::memoryAllocationFailed(ExecutionState &es, bool simulated) {
                 << ",\"error\":\"outofmemory\"";
     if (es.simulatedNil) *astatsFile << ",\"simulatedNil\":true";
     *astatsFile << ",\"func\":\"" << sf.kf->function->getName().str() << "\""
-                << ",\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
+                << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line << "}\n";
     astatsFile->flush();
   }
 }
@@ -475,7 +517,7 @@ void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
     const StackFrame &sf = es.stack.back();
     const InstructionInfo &ii = *es.pc->info;
     *astatsFile << ",\"func\":\"" << sf.kf->function->getName().str() << "\""
-                << ",\"file\":\"" << ii.file << "#" << ii.line << "\"}\n";
+                << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line << "}\n";
     astatsFile->flush();
   }
 }
