@@ -1,5 +1,7 @@
 "use strict";
 
+var _circles;
+
 function showTree(root, width, height, margin, func) {
 
     var svg = d3.select("#statetree").append("svg")
@@ -31,16 +33,7 @@ function showTree(root, width, height, margin, func) {
         })
         .attr("transform", function(d) {
             return "translate(" + d.y + "," + d.x + ")";
-        });
-
-    node.append("circle")
-        .attr("class", function(d) {
-            var clss = d.data.errors ? d.data.errors.map(e => e.name).join(' ') : "";
-            if (d.data.simulatedNil) clss += " simulatedNil";
-            return clss;
-        })
-        .attr("r", 5)
-        .on("click", function(d) {
+        }).on("click", function(d) {
 
             var mallocs = [];
             let t = d;
@@ -48,20 +41,43 @@ function showTree(root, width, height, margin, func) {
                 mallocs = t.data.mallocs.concat(mallocs);
                 t = t.parent;
             }
-            func(mallocs, d.data.stack);
+            func(d.data, mallocs);
         });
 
-    node.append("text")
-        .attr("dy", 1.5)
-        .attr("x", function(d) {
-            return -2;//d.children ? -8 : 8;
+    _circles = node.append("circle")
+        .attr("class", function(d) {
+            var clss = d.data.errors ? d.data.errors.map(e => e.name).join(' ') : "";
+            if (d.data.simulatedNil) clss += " simulatedNil";
+            return clss;
         })
-        //.style("text-anchor", function(d) {
-        //    return d.children ? "end" : "start";
-        //})
+        .attr("r", 5);
+
+
+    node.append("text")
+        .attr("y", 2.75)
+        .attr("x", function(d) {
+            return -2.75;
+        })
         .text(function(d) {
-            return "M";// + d.data.memory;
+            var errs = d.data.errors;
+            if (errs && errs.length > 0) {
+                if (errs[errs.length - 1].name == "outofmemory") return "O";
+                else if (errs[errs.length - 1].name == "nullptr") return "N";
+            }
+            return null;
         });
+
+    node.filter(d => !d.children)
+        .append("text")
+        .attr("y", function(d) {
+            return 2;
+        })
+        .attr("x", function(d) {
+            return 8;
+        })
+        .attr("style", function(d) {
+            return "fill:#000;font-size:10px";
+        }).text(d => d.data.memory);
 
     node.append("title")
         .text(function(d) {
@@ -70,9 +86,22 @@ function showTree(root, width, height, margin, func) {
             if (d.data.errors && d.data.errors.length > 0) {
                 text += "Errors:\n"
                 d.data.errors.forEach(e => {
-                    text += e.name + " in " + e.func + "() at " + e.file + "\n"
+                    text += e.name + " in " + e.func + "() at " +
+                        e.file + "#" + e.line + "\n";
                 });
             }
             return text;
         });
+}
+
+function searchFuncs(name) {
+    _circles.attr("style", function(d) {
+        var stack = d.data.stack;
+        if (name && stack && stack.length > 0) {
+            for (var i = 0; i < stack.length; i++)
+                if (stack[i].func.indexOf(name) !== -1)
+                    return "fill:#0055e7";
+        }
+        return null;
+    });
 }

@@ -4,10 +4,13 @@ function showChart(selector, data, width, height, margin, func) {
 
     var x = d3.scaleBand()
         .domain(data.map(m => m.memory))
-        .rangeRound([0, width]).padding(0.1),
+        .rangeRound([0, width]).padding(0.05),
         y = d3.scaleLinear()
         .domain([0, d3.max(data, m => m.memory)])
         .rangeRound([height, 0]);
+
+    var remove = document.querySelector(selector + " svg");
+    if (remove) remove.parentNode.removeChild(remove);
 
     var svg = d3.select(selector)
         .append("svg")
@@ -25,7 +28,7 @@ function showChart(selector, data, width, height, margin, func) {
         .attr("dy", "0.71em")
         .attr("text-anchor", "end")
         .attr("fill","#000")
-        .text("Frequency");
+        .text("Heap-RAM");
 
     svg.selectAll(".bar")
         .data(data)

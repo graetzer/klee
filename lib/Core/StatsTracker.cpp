@@ -437,7 +437,7 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
       *astatsFile << ",\"simulatedNil\":true,\"stack\":[";
 
       // dump the stack
-      KInstruction *target = es.prevPC;
+      KInstruction *target = es.pc;//prevPC
       for (ExecutionState::stack_ty::const_reverse_iterator
             it = es.stack.rbegin(), ie = es.stack.rend(); it != ie; ++it) {
 
@@ -471,9 +471,12 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
 
       *astatsFile << "]";
     } else {
+      const StackFrame &sf = es.stack.back();
       const InstructionInfo &ii = *es.pc->info;
-      if (ii.file != "")
-        *astatsFile << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line ;
+      if (ii.file != "") {
+        *astatsFile << ",\"func\":\"" << sf.kf->function->getName().str() << "\""
+                    << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line;
+      }
     }
     *astatsFile << ",\"terminated\":true}\n";
     astatsFile->flush();
@@ -481,8 +484,9 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
 }
 
 void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
-  mallocCount++;
   if (!mo->isLocal && !mo->isGlobal && astatsFile) {
+    mallocCount++;
+
     const StackFrame &sf = es.stack.back();
     const InstructionInfo &ii = *es.pc->info;
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId << ",\"memory\":" << es.memoryUsage
@@ -513,10 +517,12 @@ void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId;
     if (CE->getZExtValue() == 0) {
        *astatsFile << ",\"error\":\"nullptr\"";
+       if (es.simulatedNil)
+         *astatsFile << ",\"simulatedNil\":true";
     } else {
       *astatsFile << ",\"error\":\"outofbounds\"";
     }
-    
+
     const StackFrame &sf = es.stack.back();
     const InstructionInfo &ii = *es.pc->info;
     *astatsFile << ",\"func\":\"" << sf.kf->function->getName().str() << "\""
@@ -526,11 +532,11 @@ void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
 }
 
 void StatsTracker::memoryFreed(ExecutionState &es, const MemoryObject *mo) {
-  if (astatsFile) {
+  /*if (astatsFile) {
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId << ",\"memory\":" << es.memoryUsage
                 << ",\"free\":" << mo->size << "}\n";
     astatsFile->flush();
-  }
+  }*/
 }
 
 void StatsTracker::writeStatsHeader() {

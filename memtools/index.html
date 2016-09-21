@@ -19,28 +19,29 @@
     }
     
     .node text {
-      font: 7px sans-serif;
+      font: 7px sans-serif bold;
+      fill: #fff;
     }
     
     .node--internal circle {
       fill: #555;
     }
     
-    .node--internal circle.nullptr {
+    .node circle.nullptr {
       fill: #E82C0C;
     }
     
-    .node--internal circle.outofbounds {
+    .node circle.outofbounds {
       fill: #E80C7A;
     }
     /*
     .node--internal text {
       text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
-    }*/
+    }
     
     circle.simulatedNil {
       fill: #FF0DFF;
-    }
+    }*/
     
     .link {
       fill: none;
@@ -85,162 +86,128 @@
   <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
 </head>
 
-<body>
-  <h2>Memory Analysis</h2>
-  <div id="statetree">
+<body style="padding-top:50px">
+  <nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid">
+      <div class="navbar-header">
+        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+        <a class="navbar-brand" href="#">Symbolic Malloc</a>
+      </div>
+      <div id="navbar" class="navbar-collapse collapse">
+        <!--<ul class="nav navbar-nav navbar-right">
+          <li><a href="#">About</a></li>
+        </ul>-->
+        <form class="navbar-form navbar-right">
+          <input id="searchinput" type="text" class="form-control" placeholder="Search...">
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid">
     <h4>State Tree</h4>
+    <div id="statetree" style="height:500px; width:100%;overflow: scroll; border:solid 1px #ccc">
+    </div>
+
+
+    <div class="row">
+     
+      <div class="col-sm-6">
+        <div class="panel panel-default">
+          <div class="panel-heading">Call Stack</div>
+          <div class="panel-body" id="call-stack"> </div>
+
+        </div>
+      </div>
+
+       <div class="col-sm-6">
+        <div class="panel panel-default">
+          <div class="panel-heading">Memory errors</div>
+          <div class="panel-body" id="memory-errors"> </div>
+        </div>
+      </div>
+    </div>
+
+    <h5>Malloc Trace</h5>
+    <div class="row">
+      <div class="col-sm-6">
+        <div class="panel panel-default">
+          <div class="panel-heading">Heap Chart (Total over time)</div>
+          <div class="panel-body" id="heap-chart"> </div>
+        </div>
+      </div>
+      <div class="col-sm-6">
+        <div class="panel panel-default">
+          <div class="panel-body" id="mallocs"> </div>
+        </div>
+      </div>
+    </div>
+
+
+    <h4>Overall Statistics</h4>
+
+    <div class="row">
+      <div class="col-xs-9">
+        <div class="panel panel-default">
+          <div class="panel-heading">Histogram of Mallocs</div>
+          <div class="panel-body" id="histogram">
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xs-3">
+        <div class="panel panel-default">
+          <div class="panel-heading">Statistics</div>
+          <div class="panel-body" id="histogram">
+            <div class="row">
+              <div class="col-xs-9">
+                <strong>Total Mallocs</strong>
+              </div>
+              <div class="col-xs-3" id="stat-mallocs">
+                0
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-xs-9">
+                <strong>States Terminated after NPA</strong>
+              </div>
+              <div class="col-xs-3" id="stat-terminations-nilp">
+                0
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-xs-9">
+                <strong>States Term. after Sim. NPA:</strong>
+              </div>
+              <div class="col-xs-3" id="stat-terminations-simnilp">
+                0
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-xs-9">
+                <strong>Simulated Null Pointers</strong>
+              </div>
+              <div class="col-xs-3" id="stat-simnilp">
+                0
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div id="stack">
-    <h4>Call Stack Overview</h4>
-  </div>
-  <div id="chart" style="float:left‚"></div>
-  <div id="mallocs" style="float:right">
-
-  </div>
-  <div style="clear:both">
-  </div>
-
-  <div id="histogram" style="clear:both">
-    <h3>Histogram All Mallocs</h3>
-  </div>
   <div id="treemap" style="position:relative">
     <h3>(disabled) TreeMap</h3>
   </div>
+  </div>
 
-  <script>
-    "use strict";
-    var cache = {};
-
-    function getFileLines(file, callback) {
-      if (cache[file]) {
-        callback(null, cache[file]);
-        return;
-      }
-      d3.text("/src/" + file, function(error, text) {
-        if (error) {
-          callback(error);
-          return;
-        }
-        var lines = text.match(/[^\r\n]+/g);
-        cache[file] = lines;
-        callback(null, lines);
-      });
-    }
-
-    var margin = {
-        top: 10,
-        right: 30,
-        bottom: 30,
-        left: 30
-      },
-      width = 1000 - margin.left - margin.right,
-      height = 500 - margin.top - margin.bottom;
-
-    d3.json("run.astats", function(error, events) {
-      if (error) throw error;
-
-      var mallocs = events.filter(el => el.malloc != undefined);
-      showHistogram(mallocs.map(e => e.malloc), width, height, margin);
-
-      var states = d3.values(d3.nest()
-        .key(d => d.id)
-        .rollup(function(leaves) {
-          var errors = leaves.filter(e => e.error).map(e => {
-            return {
-              name: e.error,
-              func: e.func,
-              file: e.file.substring(e.file.lastIndexOf('/') + 1)
-            }
-          });
-
-          var res = {
-            id: leaves[0].id,
-            parentId: leaves[0].id != 0 ? leaves[0].parentId : null,
-            mallocs: leaves.filter(l => l.malloc != undefined),
-            errors: errors
-          }
-          leaves.forEach(l => {
-            if (l.terminated) {
-              res.memory = l.memory
-              res.simulatedNil = l.simulatedNil === true;
-              res.file = l.file;
-              res.line = l.line;
-              if (l.stack) res.stack = l.stack;
-            }
-          });
-          return res;
-        }).map(events)).slice(0, -12);
-
-      var root = d3.stratify()(states);
-      showTree(root, width, height * 2, margin, function(mallocs, stack) {
-
-        showChart("#chart", mallocs, width / 2, height, margin, function (m) {
-          
-        });
-
-        if (!stack) return;
-        // TODO switch between mallocs and stack for the code view
-        stack.forEach(sf => {
-          var file = sf.file.substring(sf.file.lastIndexOf('/') + 1);
-          getFileLines(file, (error, lines) => {
-            if (!lines || lines.length == 0) return;
-
-            var min = Math.max(0, sf.line - 3);
-            var max = Math.min(lines.length, sf.line + 3);
-            var print = lines.slice(min, max);
-            if (print.length == 0) return;
-
-            var div = d3.select("#stack")
-              .append("div")
-              .attr("style", "border:solid 1px black")
-              .append("strong")
-              .text(sf.func);
-
-            var code = div.append("pre")
-              .append('code')
-              .attr("class", "cpp")
-              .text(function(d) {
-                return print.join('\n');
-              });
-
-            //hljs.highlightBlock(code.node());
-            //if (print) {render}
-
-          });
-        });
-      });
-
-      //var files = mallocs.map(m => {file:m.file, id:}).filter((f, pos, self) => self.indexOf(f) === pos);
-      //var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
-
-
-
-      /*
-            function fileHirarchy(file) {
-              var fileMallocs = mallocs.filter(m => m.file.lastIndexOf(file, 0) === 0);
-              var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
-              return funcs.map(f => ({
-                name: f,
-                children: fileMallocs.filter(m => m.func === f).map(m => ({
-                  name: m.file.substring(m.file.lastIndexOf('/')+1) + " " + m.malloc+"b",
-                  size: m.malloc
-                }))
-              }));
-            }
-
-            var files = mallocs.map(m => m.file.substring(0, m.file.lastIndexOf('#')))
-                               .filter((f, pos, self) => self.indexOf(f) === pos) // O(n^2) method to get unique filenames
-            root = {
-              name: "Mallocs",
-              children: files.map(file => ({ // functions
-                name: file.substring(file.lastIndexOf('/') + 1, file.length),
-                children: fileHirarchy(file)
-              }))
-            };
-            showArc(d3.hierarchy(root), width, height * 2, margin);//;*/
-    });
-  </script>
+  <script src="script.js"></script>
 </body>
 
 </html>
