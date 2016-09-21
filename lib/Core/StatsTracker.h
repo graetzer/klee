@@ -57,6 +57,7 @@ namespace klee {
     void writeStatsHeader();
     void writeStatsLine();
     void writeIStats();
+    unsigned long long mallocCount;
 
   public:
     StatsTracker(Executor &_executor, std::string _objectFilename,

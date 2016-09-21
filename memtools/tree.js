@@ -2,7 +2,7 @@
 
 function showTree(root, width, height, margin, func) {
 
-    var svg = d3.select("#hierarchy").append("svg")
+    var svg = d3.select("#statetree").append("svg")
         .attr("width", width + margin.left + margin.right)
         .attr("height", height + margin.top + margin.bottom);
     var g = svg.append("g").attr("transform", "translate(40,0)");
@@ -31,7 +31,7 @@ function showTree(root, width, height, margin, func) {
         })
         .attr("transform", function(d) {
             return "translate(" + d.y + "," + d.x + ")";
-        })
+        });
 
     node.append("circle")
         .attr("class", function(d) {
@@ -39,28 +39,28 @@ function showTree(root, width, height, margin, func) {
             if (d.data.simulatedNil) clss += " simulatedNil";
             return clss;
         })
-        .attr("r", 3)
+        .attr("r", 5)
         .on("click", function(d) {
 
             var mallocs = [];
             let t = d;
             while (t) {
-                mallocs = mallocs.concat(t.data.mallocs);
+                mallocs = t.data.mallocs.concat(mallocs);
                 t = t.parent;
             }
             func(mallocs, d.data.stack);
         });
 
     node.append("text")
-        .attr("dy", 3)
+        .attr("dy", 1.5)
         .attr("x", function(d) {
-            return d.children ? -8 : 8;
+            return -2;//d.children ? -8 : 8;
         })
-        .style("text-anchor", function(d) {
-            return d.children ? "end" : "start";
-        })
+        //.style("text-anchor", function(d) {
+        //    return d.children ? "end" : "start";
+        //})
         .text(function(d) {
-            return "" + d.data.memory;
+            return "M";// + d.data.memory;
         });
 
     node.append("title")

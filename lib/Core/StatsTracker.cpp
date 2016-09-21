@@ -195,7 +195,8 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     numBranches(0),
     fullBranches(0),
     partialBranches(0),
-    updateMinDistToUncovered(_updateMinDistToUncovered) {
+    updateMinDistToUncovered(_updateMinDistToUncovered),
+    mallocCount(0) {
 
   if (StatsWriteAfterInstructions > 0 && StatsWriteInterval > 0)
     klee_error("Both options --stats-write-interval and "
@@ -480,11 +481,13 @@ void StatsTracker::stateTerminated(ExecutionState &es) {
 }
 
 void StatsTracker::memoryAllocated(ExecutionState &es, const MemoryObject *mo) {
+  mallocCount++;
   if (!mo->isLocal && !mo->isGlobal && astatsFile) {
     const StackFrame &sf = es.stack.back();
     const InstructionInfo &ii = *es.pc->info;
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId << ",\"memory\":" << es.memoryUsage
                 << ",\"malloc\":" << mo->size
+                << ",\"i\":" << mallocCount 
                 << ",\"func\":\"" << sf.kf->function->getName().str() << "\""
                 << ",\"file\":\"" << ii.file << "\",\"line\":" << ii.line << "}\n";
     astatsFile->flush();

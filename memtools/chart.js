@@ -1,13 +1,12 @@
 "use strict";
 
-function showChart(selector, data, width, height, margin) {
+function showChart(selector, data, width, height, margin, func) {
 
     var x = d3.scaleBand()
-        .domain(data)
-        .rangeRound([0, width])
-        .padding(0.1),
+        .domain(data.map(m => m.memory))
+        .rangeRound([0, width]).padding(0.1),
         y = d3.scaleLinear()
-        .domain([0, d3.max(data)])
+        .domain([0, d3.max(data, m => m.memory)])
         .rangeRound([height, 0]);
 
     var svg = d3.select(selector)
@@ -16,9 +15,6 @@ function showChart(selector, data, width, height, margin) {
         .attr("height", height + margin.top + margin.bottom)
         .append("g")
         .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-/*
-    x.domain([0, data.length]);
-    y.domain([0, d3.max(data)]);*/
 
     svg.append("g")
         .attr("class", "axis axis--y")
@@ -37,15 +33,16 @@ function showChart(selector, data, width, height, margin) {
         .append("rect")
         .attr("class", "bar")
         .attr("x", function(d, i) {
-            return x(d);
+            return x(d.memory);
         })
         .attr("y", function(d) {
-            return y(d);
+            return y(d.memory);
         })
         .attr("width", x.bandwidth())
         .attr("height", function(d) {
-            return height - y(d);
-        });
+            return height - y(d.memory);
+        })
+        .on("click", func);
 
     var axis = svg.append("g")
         .attr("class", "axis axis--x")

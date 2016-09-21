@@ -19,7 +19,7 @@
     }
     
     .node text {
-      font: 10px sans-serif;
+      font: 7px sans-serif;
     }
     
     .node--internal circle {
@@ -33,10 +33,10 @@
     .node--internal circle.outofbounds {
       fill: #E80C7A;
     }
-    
+    /*
     .node--internal text {
       text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
-    }
+    }*/
     
     circle.simulatedNil {
       fill: #FF0DFF;
@@ -62,46 +62,47 @@
     rect {
       fill: none;
     }
-
+    
     .bar {
       fill: steelblue;
     }
-
+    
     .bar:hover {
       fill: brown;
     }
-
+    
     .axis--x path {
       display: none;
     }
   </style>
-  <script src="https://d3js.org/d3.v4.js"></script>
+  <script src="/js/d3.min.js"></script>
   <script src="tree.js"></script>
   <script src="histogram.js"></script>
   <script src="arc.js"></script>
   <script src="chart.js"></script>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" 
-  integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
-  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/styles/default.min.css">
+  <link rel="stylesheet" href="/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <link rel="stylesheet" href="/css/default.css">
   <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
 </head>
 
 <body>
   <h2>Memory Analysis</h2>
-  <div id="hierarchy">
-    <h3>Execution Overview</h3>
+  <div id="statetree">
+    <h4>State Tree</h4>
   </div>
 
-  <div id="hierarchy">
-    <h3>Execution Overview</h3>
+  <div id="stack">
+    <h4>Call Stack Overview</h4>
   </div>
-
   <div id="chart" style="float:left‚"></div>
-  <div id="snippets" style="float:right"></div>
-  <dive style="clear:both"></div>
+  <div id="mallocs" style="float:right">
+
+  </div>
+  <div style="clear:both">
+  </div>
 
   <div id="histogram" style="clear:both">
-    <h3>Histogram Malloc Sizes</h3>
+    <h3>Histogram All Mallocs</h3>
   </div>
   <div id="treemap" style="position:relative">
     <h3>(disabled) TreeMap</h3>
@@ -110,19 +111,20 @@
   <script>
     "use strict";
     var cache = {};
+
     function getFileLines(file, callback) {
       if (cache[file]) {
         callback(null, cache[file]);
         return;
       }
-      d3.text("/src/" + file,  function(error, text) {
-         if (error) {
-           callback(error);
-           return;
-         }
-         var lines = text.match(/[^\r\n]+/g);
-         cache[file] = lines;
-         callback(null, lines);
+      d3.text("/src/" + file, function(error, text) {
+        if (error) {
+          callback(error);
+          return;
+        }
+        var lines = text.match(/[^\r\n]+/g);
+        cache[file] = lines;
+        callback(null, lines);
       });
     }
 
@@ -173,65 +175,72 @@
       var root = d3.stratify()(states);
       showTree(root, width, height * 2, margin, function(mallocs, stack) {
 
-        showChart("#chart", mallocs.map(m => m.memory), width, height, margin);
-
-        // TODO switch between mallocs and stack for the code view
-        stack.forEach(sf => {
-          var file = sf.file.substring(sf.file.lastIndexOf('/')+1);
-          getFileLines(file, (error, lines) => {
-            
-            var min = Math.max(0, sf.line - 5);
-            var max = Math.min(lines.length, sf.line+5);
-            var print = lines.slice(min, max);
-
-            d3.select("#snippets")
-            .append("pre")
-            .attr("style", "border:solid 1px black")
-            .append('code')
-            .attr("class", "cpp")
-            .text(function(d) {
-                return print.join('\n');
-            });
-
-            //if (print) {render}
-
-          });
+        showChart("#chart", mallocs, width / 2, height, margin, function (m) {
           
         });
 
-        var tags = document.getElementsByTagName("code")
-        for (var i = 0; i < tags.length; i++)
-          hljs.highlightBlock(tags[i]);
-     });
+        if (!stack) return;
+        // TODO switch between mallocs and stack for the code view
+        stack.forEach(sf => {
+          var file = sf.file.substring(sf.file.lastIndexOf('/') + 1);
+          getFileLines(file, (error, lines) => {
+            if (!lines || lines.length == 0) return;
+
+            var min = Math.max(0, sf.line - 3);
+            var max = Math.min(lines.length, sf.line + 3);
+            var print = lines.slice(min, max);
+            if (print.length == 0) return;
+
+            var div = d3.select("#stack")
+              .append("div")
+              .attr("style", "border:solid 1px black")
+              .append("strong")
+              .text(sf.func);
+
+            var code = div.append("pre")
+              .append('code')
+              .attr("class", "cpp")
+              .text(function(d) {
+                return print.join('\n');
+              });
+
+            //hljs.highlightBlock(code.node());
+            //if (print) {render}
+
+          });
+        });
+      });
+
+      //var files = mallocs.map(m => {file:m.file, id:}).filter((f, pos, self) => self.indexOf(f) === pos);
+      //var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
 
 
 
-/*
-      function fileHirarchy(file) {
-        var fileMallocs = mallocs.filter(m => m.file.lastIndexOf(file, 0) === 0);
-        var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
-        return funcs.map(f => ({
-          name: f,
-          children: fileMallocs.filter(m => m.func === f).map(m => ({
-            name: m.file.substring(m.file.lastIndexOf('/')+1) + " " + m.malloc+"b",
-            size: m.malloc
-          }))
-        }));
-      }
+      /*
+            function fileHirarchy(file) {
+              var fileMallocs = mallocs.filter(m => m.file.lastIndexOf(file, 0) === 0);
+              var funcs = fileMallocs.map(m => m.func).filter((f, pos, self) => self.indexOf(f) === pos);
+              return funcs.map(f => ({
+                name: f,
+                children: fileMallocs.filter(m => m.func === f).map(m => ({
+                  name: m.file.substring(m.file.lastIndexOf('/')+1) + " " + m.malloc+"b",
+                  size: m.malloc
+                }))
+              }));
+            }
 
-      var files = mallocs.map(m => m.file.substring(0, m.file.lastIndexOf('#')))
-                         .filter((f, pos, self) => self.indexOf(f) === pos) // O(n^2) method to get unique filenames
-      root = {
-        name: "Mallocs",
-        children: files.map(file => ({ // functions
-          name: file.substring(file.lastIndexOf('/') + 1, file.length),
-          children: fileHirarchy(file)
-        }))
-      };
-      showArc(d3.hierarchy(root), width, height * 2, margin);//;*/
+            var files = mallocs.map(m => m.file.substring(0, m.file.lastIndexOf('#')))
+                               .filter((f, pos, self) => self.indexOf(f) === pos) // O(n^2) method to get unique filenames
+            root = {
+              name: "Mallocs",
+              children: files.map(file => ({ // functions
+                name: file.substring(file.lastIndexOf('/') + 1, file.length),
+                children: fileHirarchy(file)
+              }))
+            };
+            showArc(d3.hierarchy(root), width, height * 2, margin);//;*/
     });
-
-</script>
+  </script>
 </body>
 
 </html>
