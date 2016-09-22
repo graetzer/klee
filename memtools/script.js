@@ -18,7 +18,7 @@ function getFileLines(file, callback) {
 }
 
 function showStateHistory(state, mallocs) {
-    mallocs.sort((a,b) => a.i - b.i);
+    mallocs.sort((a, b) => a.i - b.i);
 
     showChart("#heap-chart", mallocs, 500, 500, margin, function(m) {
         renderStackFrame("#mallocs", m);
@@ -45,38 +45,52 @@ function renderStackFrame(selector, sf) {
             remove[i].parentNode.removeChild(remove[i]);
     }
 
-    var file = sf.file.substring(sf.file.lastIndexOf('/') + 1);
-    getFileLines(file, (error, lines) => {
-        if (!lines || lines.length == 0) return;
+    if (sf.file) { // usually the main function
+        var file = sf.file.substring(sf.file.lastIndexOf('/') + 1);
+        getFileLines(file, (error, lines) => {
+            if (!lines || lines.length == 0) {
+                console.log("Missing " + sf.file);
+                return;
+            }
 
-        var ll = sf.line - 1; // line is 1 based
-        lines[ll] = ">>> " + lines[ll] + " <<<";
-        var min = Math.max(0, ll - 3);
-        var max = Math.min(lines.length, ll + 3);
-        var print = lines.slice(min, max);
-        if (print.length == 0) return;
+            var ll = sf.line - 1; // line is 1 based
+            lines[ll] = ">>> " + lines[ll] + " <<<";
+            var min = Math.max(0, ll - 3);
+            var max = Math.min(lines.length, ll + 3);
+            var print = lines.slice(min, max);
+            if (print.length == 0) return;
 
-        var div = d3.select(selector)
+            var div = d3.select(selector)
+                .append("div")
+                .attr("class", "remove")
+                .append("strong")
+                .text(function() {
+                    var str = sf.func + " at " + sf.file + "#" + sf.line;
+                    if (sf.name) str = sf.name + " " + str;
+                    return str;
+                });
+
+            var code = div.append("pre")
+                .append('code')
+                .attr("class", "cpp, remove")
+                .text(function(d) {
+                    return print.join('\n');
+                });
+
+            //hljs.highlightBlock(code.node());
+            //if (print) {render}
+
+        });
+
+    } else if (sf.func) {
+        d3.select(selector)
             .append("div")
             .attr("class", "remove")
             .append("strong")
             .text(function() {
-                var str = sf.func + " at " + sf.file + "#" + sf.line; 
-                if (sf.name) str = sf.name + " " + str;
-                return str;
+                sf.func;
             });
-
-        var code = div.append("pre")
-            .append('code')
-            .attr("class", "cpp, remove")
-            .text(function(d) {
-                return print.join('\n');
-            });
-
-        //hljs.highlightBlock(code.node());
-        //if (print) {render}
-
-    });
+    }
 }
 
 var margin = {
@@ -125,7 +139,7 @@ d3.json("run.astats", function(error, events) {
         }).map(events)).slice(0, -12);
 
     var root = d3.stratify()(states);
-    showTree(root, 2000, 2000, margin, showStateHistory);
+    showTree(root, 3000, 4000, margin, showStateHistory);
 
     document.getElementById("searchinput").onkeyup = (e => {
         searchFuncs(e.target.value);
