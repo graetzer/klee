@@ -53,7 +53,8 @@ function showTree(root, width, height, margin, func) {
         .attr("r", 5);
 
 
-    node.append("text")
+    node.filter(d => d.data.errors)
+        .append("text")
         .attr("y", 2.75)
         .attr("x", function(d) {
             return -2.75;
@@ -100,6 +101,12 @@ function searchFuncs(name) {
         if (name && stack && stack.length > 0) {
             for (var i = 0; i < stack.length; i++)
                 if (stack[i].func.indexOf(name) !== -1)
+                    return "fill:#0055e7";
+        }
+        var errs = d.data.errors;
+        if (errs && errs.length > 0) {
+            for (var i = 0; i < errs.length; i++)
+                if (errs[i].func.indexOf(name) !== -1)
                     return "fill:#0055e7";
         }
         return null;

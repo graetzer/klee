@@ -307,7 +307,7 @@ namespace {
                                 cl::init(false));
   
   cl::opt<unsigned> MallocReturnNullThreshold("malloc-return-null-threshold",
-                                         cl::desc("Threshold for malloc to fork and return NULL in one branch (in MB, default=0)"),
+                                         cl::desc("Threshold for malloc to fork and return NULL in one branch (in KB, default=0)"),
                                          cl::init(0));
 }
 
@@ -3113,7 +3113,7 @@ void Executor::executeAlloc(ExecutionState &state,
       ExecutionState *memState = &state;
       unsigned memSize = memState->memoryUsage + concreteSize;
       
-      if (!isLocal && MallocReturnNull && memSize >= MallocReturnNullThreshold.getValue() * 1024 * 1024 ) {
+      if (!isLocal && MallocReturnNull && memSize >= MallocReturnNullThreshold.getValue() * 1024 ) {
         
         // TODO was passiert mit den seeds? Ansonsten wäre ja hier alles gleich im branch()
         // außer addCondition. addCondition schlaegt fehl mo->getBaseExpr()->IsTrue == false
