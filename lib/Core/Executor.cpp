@@ -277,6 +277,25 @@ namespace {
            cl::desc("Amount of time to dedicate to seeds, before normal search (default=0 (off))"),
            cl::init(0));
   
+  cl::list<Executor::TerminateReason>
+  ExitOnErrorType("exit-on-error-type",
+		  cl::desc("Stop execution after reaching a specified condition.  (default=off)"),
+		  cl::values(
+		    clEnumValN(Executor::Abort, "Abort", "The program crashed"),
+		    clEnumValN(Executor::Assert, "Assert", "An assertion was hit"),
+		    clEnumValN(Executor::Exec, "Exec", "Trying to execute an unexpected instruction"),
+		    clEnumValN(Executor::External, "External", "External objects referenced"),
+		    clEnumValN(Executor::Free, "Free", "Freeing invalid memory"),
+		    clEnumValN(Executor::Model, "Model", "Memory model limit hit"),
+		    clEnumValN(Executor::Overflow, "Overflow", "An overflow occurred"),
+		    clEnumValN(Executor::Ptr, "Ptr", "Pointer error"),
+		    clEnumValN(Executor::ReadOnly, "ReadOnly", "Write to read-only memory"),
+		    clEnumValN(Executor::ReportError, "ReportError", "klee_report_error called"),
+		    clEnumValN(Executor::User, "User", "Wrong klee_* functions invocation"),
+		    clEnumValN(Executor::Unhandled, "Unhandled", "Unhandled instruction hit"),
+		    clEnumValEnd),
+		  cl::ZeroOrMore);
+
   cl::opt<unsigned int>
   StopAfterNInstructions("stop-after-n-instructions",
                          cl::desc("Stop execution after specified number of instructions (default=0 (off))"),
@@ -315,6 +334,21 @@ namespace {
 namespace klee {
   RNG theRNG;
 }
+
+const char *Executor::TerminateReasonNames[] = {
+  [ Abort ] = "abort",
+  [ Assert ] = "assert",
+  [ Exec ] = "exec",
+  [ External ] = "external",
+  [ Free ] = "free",
+  [ Model ] = "model",
+  [ Overflow ] = "overflow",
+  [ Ptr ] = "ptr",
+  [ ReadOnly ] = "readonly",
+  [ ReportError ] = "reporterror",
+  [ User ] = "user",
+  [ Unhandled ] = "xxx",
+};
 
 Executor::Executor(const InterpreterOptions &opts, InterpreterHandler *ih)
     : Interpreter(opts), kmodule(0), interpreterHandler(ih), searcher(0),
@@ -1323,16 +1357,16 @@ void Executor::executeCall(ExecutionState &state,
         klee_warning_once(f, "calling %s with extra arguments.", 
                           f->getName().data());
       } else if (callingArgs < funcArgs) {
-        terminateStateOnError(state, "calling function with too few arguments", 
-                              "user.err");
+        terminateStateOnError(state, "calling function with too few arguments",
+                              User);
         return;
       }
     } else {
       Expr::Width WordSize = Context::get().getPointerWidth();
 
       if (callingArgs < funcArgs) {
-        terminateStateOnError(state, "calling function with too few arguments", 
-                              "user.err");
+        terminateStateOnError(state, "calling function with too few arguments",
+                              User);
         return;
       }
 
@@ -2518,14 +2552,20 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     bindLocal(ki, state, result);
     break;
   }
- 
-    // Other instructions...
-    // Unhandled
+#if LLVM_VERSION_CODE >= LLVM_VERSION(3, 3)
+  case Instruction::Fence: {
+    // Ignore for now
+    break;
+  }
+#endif
+
+  // Other instructions...
+  // Unhandled
   case Instruction::ExtractElement:
   case Instruction::InsertElement:
   case Instruction::ShuffleVector:
     terminateStateOnError(state, "XXX vector instructions unhandled",
-                          "xxx.err");
+                          Unhandled);
     break;
  
   default:
@@ -2910,8 +2950,21 @@ const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const Execut
   }
   return *ii;
 }
+
+bool Executor::shouldExitOn(enum TerminateReason termReason) {
+  std::vector<TerminateReason>::iterator s = ExitOnErrorType.begin();
+  std::vector<TerminateReason>::iterator e = ExitOnErrorType.end();
+
+  for (; s != e; ++s)
+    if (termReason == *s)
+      return true;
+
+  return false;
+}
+
 void Executor::terminateStateOnError(ExecutionState &state,
                                      const llvm::Twine &messaget,
+                                     enum TerminateReason termReason,
                                      const char *suffix,
                                      const llvm::Twine &info) {
   std::string message = messaget.str();
@@ -2944,10 +2997,20 @@ void Executor::terminateStateOnError(ExecutionState &state,
     if (info_str != "")
       msg << "Info: \n" << info_str;
 
+    std::string suffix_buf;
+    if (!suffix) {
+      suffix_buf = TerminateReasonNames[termReason];
+      suffix_buf += ".err";
+      suffix = suffix_buf.c_str();
+    }
+
     interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
   }
     
   terminateState(state);
+
+  if (shouldExitOn(termReason))
+    haltExecution = true;
 }
 
 // XXX shoot me
@@ -2970,7 +3033,7 @@ void Executor::callExternalFunction(ExecutionState &state,
   if (NoExternals && !okExternals.count(function->getName())) {
     llvm::errs() << "KLEE:ERROR: Calling not-OK external function : "
                  << function->getName().str() << "\n";
-    terminateStateOnError(state, "externals disallowed", "user.err");
+    terminateStateOnError(state, "externals disallowed", User);
     return;
   }
 
@@ -3028,13 +3091,13 @@ void Executor::callExternalFunction(ExecutionState &state,
   bool success = externalDispatcher->executeCall(function, target->inst, args);
   if (!success) {
     terminateStateOnError(state, "failed external call: " + function->getName(),
-                          "external.err");
+                          External);
     return;
   }
 
   if (!state.addressSpace.copyInConcretes()) {
     terminateStateOnError(state, "external modified read-only object",
-                          "external.err");
+                          External);
     return;
   }
 
@@ -3225,10 +3288,8 @@ void Executor::executeAlloc(ExecutionState &state,
           ExprPPrinter::printOne(info, "  size expr", size);
           info << "  concretization : " << example << "\n";
           info << "  unbound example: " << tmp << "\n";
-          terminateStateOnError(*hugeSize.second, 
-                                "concretized symbolic size", 
-                                "model.err", 
-                                info.str());
+          terminateStateOnError(*hugeSize.second, "concretized symbolic size",
+                                Model, NULL, info.str());
         }
       }
     }
@@ -3255,14 +3316,10 @@ void Executor::executeFree(ExecutionState &state,
            ie = rl.end(); it != ie; ++it) {
       const MemoryObject *mo = it->first.first;
       if (mo->isLocal) {
-        terminateStateOnError(*it->second, 
-                              "free of alloca", 
-                              "free.err",
+        terminateStateOnError(*it->second, "free of alloca", Free, NULL,
                               getAddressInfo(*it->second, address));
       } else if (mo->isGlobal) {
-        terminateStateOnError(*it->second, 
-                              "free of global", 
-                              "free.err",
+        terminateStateOnError(*it->second, "free of global", Free, NULL,
                               getAddressInfo(*it->second, address));
       } else {
         if (state.memoryUsage >= mo->size) state.memoryUsage -= mo->size;
@@ -3303,10 +3360,8 @@ void Executor::resolveExact(ExecutionState &state,
   }
 
   if (unbound) {
-    terminateStateOnError(*unbound,
-                          "memory error: invalid pointer: " + name,
-                          "ptr.err",
-                          getAddressInfo(*unbound, p));
+    terminateStateOnError(*unbound, "memory error: invalid pointer: " + name,
+                          Ptr, NULL, getAddressInfo(*unbound, p));
   }
 }
 
@@ -3361,9 +3416,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       const ObjectState *os = op.second;
       if (isWrite) {
         if (os->readOnly) {
-          terminateStateOnError(state,
-                                "memory error: object read only",
-                                "readonly.err");
+          terminateStateOnError(state, "memory error: object read only",
+                                ReadOnly);
         } else {
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           wos->write(offset, value);
@@ -3405,9 +3459,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (bound) {
       if (isWrite) {
         if (os->readOnly) {
-          terminateStateOnError(*bound,
-                                "memory error: object read only",
-                                "readonly.err");
+          terminateStateOnError(*bound, "memory error: object read only",
+                                ReadOnly);
         } else {
           ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
           wos->write(mo->getOffsetExpr(address), value);
@@ -3428,12 +3481,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
     } else {
-      terminateStateOnError(*unbound,
-                            "memory error: out of bound pointer",
-                            "ptr.err",
-                            getAddressInfo(*unbound, address));
-      if (statsTracker)
+      if (statsTracker) {
         statsTracker->memoryOutOfBounds(state, address);
+      }
+      terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
+                            NULL, getAddressInfo(*unbound, address));
     }
   }
 }
@@ -3468,9 +3520,8 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
             std::vector<unsigned char> &values = si.assignment.bindings[array];
             values = std::vector<unsigned char>(mo->size, '\0');
           } else if (!AllowSeedExtension) {
-            terminateStateOnError(state, 
-                                  "ran out of inputs during seeding",
-                                  "user.err");
+            terminateStateOnError(state, "ran out of inputs during seeding",
+                                  User);
             break;
           }
         } else {
@@ -3484,9 +3535,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
 		<< " vs " << obj->name << "[" << obj->numBytes << "]"
 		<< " in test\n";
 
-            terminateStateOnError(state,
-                                  msg.str(),
-                                  "user.err");
+            terminateStateOnError(state, msg.str(), User);
             break;
           } else {
             std::vector<unsigned char> &values = si.assignment.bindings[array];
@@ -3503,11 +3552,11 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
   } else {
     ObjectState *os = bindObjectInState(state, mo, false);
     if (replayPosition >= replayKTest->numObjects) {
-      terminateStateOnError(state, "replay count mismatch", "user.err");
+      terminateStateOnError(state, "replay count mismatch", User);
     } else {
       KTestObject *obj = &replayKTest->objects[replayPosition++];
       if (obj->numBytes != mo->size) {
-        terminateStateOnError(state, "replay size mismatch", "user.err");
+        terminateStateOnError(state, "replay size mismatch", User);
       } else {
         for (unsigned i=0; i<mo->size; i++)
           os->write8(i, obj->bytes[i]);
