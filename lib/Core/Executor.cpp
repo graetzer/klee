@@ -3265,7 +3265,9 @@ void Executor::executeFree(ExecutionState &state,
                               "free.err",
                               getAddressInfo(*it->second, address));
       } else {
-        state.memoryUsage -= mo->size;
+        if (state.memoryUsage >= mo->size) state.memoryUsage -= mo->size;
+        else klee_warning("Executor::executeFree() : State memoryUsage seems inconsistent!");
+
         if (statsTracker)
           statsTracker->memoryFreed(state, mo);
       
