@@ -3174,8 +3174,7 @@ void Executor::executeAlloc(ExecutionState &state,
     } else {
       
       ExecutionState *memState = &state;
-      unsigned memSize = memState->memoryUsage + concreteSize;
-      
+      unsigned memSize = memState->memoryUsage + concreteSize;      
       if (!isLocal && MallocReturnNull && memSize >= MallocReturnNullThreshold.getValue() * 1024 ) {
         
         // TODO was passiert mit den seeds? Ansonsten wäre ja hier alles gleich im branch()
@@ -3203,7 +3202,9 @@ void Executor::executeAlloc(ExecutionState &state,
         if (statsTracker)
           statsTracker->memoryAllocationFailed(*nilState, true);
       }
-      memState->memoryUsage = memSize;
+      if (!isLocal) {
+        memState->memoryUsage = memSize;
+      }
       
       ObjectState *os = bindObjectInState(*memState, mo, isLocal);
       if (zeroMemory) os->initializeToZero();
