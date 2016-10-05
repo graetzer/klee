@@ -512,6 +512,8 @@ void StatsTracker::memoryAllocationFailed(ExecutionState &es, bool simulated) {
 }
 
 void StatsTracker::memoryOutOfBounds(ExecutionState &es, ref<Expr> address) {
+  if (!astatsFile) return;
+
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
     
     *astatsFile << ",{\"id\":" << es.currentId << ",\"parentId\":" << es.parentId;
